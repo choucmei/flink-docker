@@ -15,8 +15,35 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 ###############################################################################
+FROM openjdk:8-jre
 
-FROM eclipse-temurin:8-jre-jammy
+ENV FLINK_TAR=flink-1.18-SNAPSHOT.tar.gz
+COPY gosu-amd64 /usr/local/bin/gosu
+COPY gosu-amd64.asc /usr/local/bin/gosu.asc
+
+# Install dependencies
+RUN set -ex; \
+  apt-get update; \
+  apt-get -y install gpg libsnappy1v5 gettext-base libjemalloc-dev; \
+  rm -rf /var/lib/apt/lists/*
+
+COPY $FLINK_TAR $FLINK_HOME
+# Install dependencies
+ENV GOSU_VERSION 1.11
+RUN set -ex; \
+  export GNUPGHOME="$(mktemp -d)"; \
+  for server in ha.pool.sks-keyservers.net $(shuf -e \
+                          hkp://p80.pool.sks-keyservers.net:80 \
+                          keyserver.ubuntu.com \
+                          hkp://keyserver.ubuntu.com:80 \
+                          pgp.mit.edu) ; do \
+      gpg --batch --keyserver "$server" --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 && break || : ; \
+  done && \
+  gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
+  gpgconf --kill all; \
+  rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc; \
+  chmod +x /usr/local/bin/gosu; \
+  gosu nobody true
 
 
 # Prepare environment
@@ -28,10 +55,7 @@ WORKDIR $FLINK_HOME
 
 ENV FLINK_HOME=/opt/flink
 # Change
-ENV FLINK_TAR=flink-1.18-SNAPSHOT.tar.gz
 COPY $FLINK_TAR $FLINK_HOME
-
-
 
 # Install Flink
 RUN set -ex; \
